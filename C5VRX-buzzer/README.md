@@ -250,4 +250,8 @@ Flashing note for this board: esptool's USB-JTAG reset did not start the
 application after flashing and any host open/close of the port while the
 application runs made the port unresponsive, so flash with the chip in the
 ROM bootloader (hold BOOT while plugging in, or BOOT + RESET), press RESET
-afterwards, and keep one serial session open.
+afterwards, and keep one serial session open. `tools/flash_when_ready.ps1`
+does exactly that: it waits for the bootloader on the port, flashes the
+latest build and starts `tools/serial_log.py`, a timestamping logger that
+survives the re-enumeration on every reset and sends console keys from a
+command file.
