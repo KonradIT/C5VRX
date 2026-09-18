@@ -1,0 +1,24 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "rf.c"
+        "capture.c"
+        "meter.c"
+        "buzzer.c"
+    INCLUDE_DIRS "."
+    REQUIRES
+        esp_wifi
+        nvs_flash
+        esp_event
+        esp_netif
+        esp_driver_parlio
+        esp_driver_gpio
+        esp_driver_ledc
+        esp_rom
+        esp_mm
+        esp_timer
+        freertos
+        heap
+        hal
+        esp_hw_support
+)

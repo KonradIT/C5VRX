@@ -1,0 +1,65 @@
+# C5VRX-buzzer sdkconfig.defaults
+# RF front-end and Wi-Fi settings follow C5VRX-3 (proven MODEM_DIAG capture).
+# Flash, CPU clock and PVT follow the conservative ESP32-C5 v1.0 bring-up of the
+# root project (sdkconfig.flash40.defaults); the meter needs no CPU speed.
+
+CONFIG_IDF_TARGET="esp32c5"
+
+# ----- CPU & clock -----
+# CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240 is not set
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_160=y
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=160
+# CONFIG_ESP_ENABLE_PVT is not set
+
+# ----- Flash: 8 MB DIO at 40 MHz -----
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
+# CONFIG_ESPTOOLPY_FLASHFREQ_80M is not set
+CONFIG_ESPTOOLPY_FLASHFREQ_40M=y
+CONFIG_ESPTOOLPY_FLASHFREQ="40m"
+
+# ----- Partition table: bootloader + phy_init + factory app -----
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# ----- Console / USB -----
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+# ----- FreeRTOS -----
+CONFIG_FREERTOS_HZ=1000
+
+# ----- Logging -----
+CONFIG_LOG_DEFAULT_LEVEL_WARNING=y
+
+# ----- Wi-Fi: RAM-only storage, receive-only use of the PHY -----
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=4
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=8
+CONFIG_ESP_WIFI_TX_BUFFER_TYPE_DYNAMIC=y
+CONFIG_ESP_WIFI_STA_DISCONNECTED_PM_ENABLE=n
+
+# ----- Wireless: Wi-Fi only -----
+CONFIG_IEEE802154_ENABLED=n
+CONFIG_ESP_COEX_SW_COEXIST_ENABLE=n
+
+# ----- PHY: vendor gain/AGC control, no periodic PLL tracking -----
+CONFIG_ESP_PHY_ENABLE_CERT_TEST=y
+CONFIG_ESP_PHY_DEBUG=y
+CONFIG_ESP_PHY_DISABLE_PLL_TRACK=y
+
+# ----- Power management -----
+CONFIG_PM_ENABLE=n
+
+# ----- Buzzer -----
+CONFIG_C5VRX_BUZZER_GPIO=25
+# Wi-Fi channel = (VTX MHz - 5000) / 5, nearest integer. 169 = 5845 MHz (Raceband R6 5843).
+CONFIG_C5VRX_BUZZER_WIFI_CHANNEL=169
+
+# ----- Sweep: standard 5 GHz channels 5180..5885 MHz, 20 MHz apart -----
+CONFIG_C5VRX_BUZZER_SWEEP=y
+CONFIG_C5VRX_BUZZER_SWEEP_MIN_MHZ=5180
+CONFIG_C5VRX_BUZZER_SWEEP_MAX_MHZ=5925
+CONFIG_C5VRX_BUZZER_SWEEP_STEP_MHZ=20
+
+# ----- Jammer discrimination: constant envelope + video line sync -----
+CONFIG_C5VRX_BUZZER_REJECT_NOISE=y
+CONFIG_C5VRX_BUZZER_REQUIRE_SYNC=y

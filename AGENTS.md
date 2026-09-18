@@ -3,6 +3,9 @@
 `Twotoz/C5VRX` is the canonical project repository.
 
 - Current implementation: `/main`
+- Buzzer proximity firmware without video output: `/C5VRX-buzzer` (derived
+  from the receiver in `/main`; two I/Q lane GPIOs differ, see its rf.c;
+  built with PlatformIO, see its platformio.ini)
 - Current hardware-proven findings: `/docs`
 - Historical experiments: `/legacy/c5vrx1`
 - Preserved archive discussions: `/docs/legacy-issues`

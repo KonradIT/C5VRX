@@ -1,0 +1,81 @@
+menu "C5VRX buzzer"
+
+config C5VRX_BUZZER_SWEEP
+    bool "Sweep the 5 GHz band continuously"
+    default y
+    help
+        Tune through the standard 5 GHz Wi-Fi channels (36..64, 100..144,
+        149..177, i.e. 5180..5885 MHz in 20 MHz steps) over and over, measure
+        the carrier power on each and drive the buzzer from the strongest
+        channel. Disable to listen on C5VRX_BUZZER_WIFI_CHANNEL only.
+
+config C5VRX_BUZZER_SWEEP_MIN_MHZ
+    int "Sweep start (MHz)"
+    depends on C5VRX_BUZZER_SWEEP
+    range 5170 5925
+    default 5180
+    help
+        Lowest channel centre to include. FPV bands live in 5645..5945 MHz;
+        5645 skips the Wi-Fi-only lower half and doubles the sweep rate.
+
+config C5VRX_BUZZER_SWEEP_MAX_MHZ
+    int "Sweep end (MHz)"
+    depends on C5VRX_BUZZER_SWEEP
+    range 5170 5925
+    default 5925
+    help
+        Highest channel centre to include. 5885 (channel 177) is the top of
+        the standard Wi-Fi grid; 5905 and 5925 (channels 181, 185, FPV bands
+        E8 / R8) are offered to the driver as well. Channels the driver
+        rejects are reported at boot and skipped.
+
+config C5VRX_BUZZER_SWEEP_STEP_MHZ
+    int "Sweep step (MHz)"
+    depends on C5VRX_BUZZER_SWEEP
+    range 20 40
+    default 20
+    help
+        20 visits every standard channel (the ~20 MHz analog passband then
+        covers the band without gaps), 40 visits every other channel for a
+        faster sweep.
+
+config C5VRX_BUZZER_WIFI_CHANNEL
+    int "5 GHz Wi-Fi channel when not sweeping"
+    range 36 177
+    default 169
+    help
+        The receiver starts on this channel and stays on it when the sweep
+        is disabled or when every sweep channel is rejected. Centre frequency
+        is 5000 + 5 * channel MHz: FPV Raceband R6 5843 MHz -> 169 (5845 MHz),
+        band A1 5865 MHz -> 173. C5VRX itself was proven on 173.
+
+config C5VRX_BUZZER_REJECT_NOISE
+    bool "Ignore carriers with a noise-like envelope (pure-noise jammers)"
+    default y
+    help
+        An FM video carrier has a constant envelope; Gaussian noise does
+        not (power variance / mean^2 close to 1). Channels that fail this
+        test never drive the buzzer. Applied only to channels strong enough
+        to judge (minimum window power >= 6, about 6 dB above the noise).
+
+config C5VRX_BUZZER_REQUIRE_SYNC
+    bool "Require television line sync in the demodulated signal"
+    default y
+    help
+        FM-demodulate the captured I/Q and require the autocorrelation at
+        one video line (64.0 us PAL / 63.6 us NTSC) to exceed 0.25. Rejects
+        unmodulated (CW), noise-modulated and swept jammers, and also a
+        transmitter with no camera attached. Costs about 2 ms per channel
+        above the noise. Applied only to channels strong enough to judge.
+
+config C5VRX_BUZZER_GPIO
+    int "Buzzer GPIO"
+    range 0 28
+    default 25
+    help
+        GPIO that drives the passive buzzer with an LEDC PWM tone.
+        25 is pad D2 of the Seeed Studio XIAO ESP32-C5; 3 is its MTDI pad.
+        It must not be one of the MODEM_DIAG lane GPIOs 1, 0, 23, 7, 10, 5,
+        24 and 4 (see rf.c), which toggle at 40 MHz while receiving.
+
+endmenu
