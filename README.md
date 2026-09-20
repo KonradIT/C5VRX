@@ -234,6 +234,7 @@ Connecting to the USB serial console (115200 baud) provides live telemetry and s
 ### Prerequisites
 - **Option A (Docker - Recommended)**: Docker Desktop or Docker engine installed.
 - **Option B (Native ESP-IDF)**: [ESP-IDF v6.0.x](https://docs.espressif.com/projects/esp-idf/en/v6.0/esp32c5/get-started/) installed with Python 3.10+.
+- **Option C (PlatformIO)**: Python 3.10+ and the pioarduino core fork (`pip install pioarduino`); it fetches the toolchain and ESP-IDF itself.
 
 ---
 
@@ -267,7 +268,28 @@ export.ps1
 idf.py build
 ```
 
-The build produces three critical binaries in `build/`:
+#### Option C: Build with PlatformIO
+`platformio.ini` describes the same ESP-IDF build, so a plain checkout builds without installing a
+toolchain first. The official `platformio/espressif32` platform supports neither the ESP32-C5 nor
+ESP-IDF 6, so the project pins the community [pioarduino](https://github.com/pioarduino/platform-espressif32)
+platform at a fixed commit, which requires the pioarduino core fork of PlatformIO:
+
+```powershell
+pip install pioarduino
+pio run -e xiao_c5
+```
+
+On Windows run `pio` from PowerShell or cmd: the ESP-IDF tool installer refuses to run under
+MSYS/Git Bash. The first build downloads the toolchain and ESP-IDF v6.0.1 (a few hundred MB) into
+`~/.platformio`; `tools/pio_idf_toolchain.py` then selects the exact `riscv32-esp-elf` version that
+ESP-IDF 6.0 requires, which is newer than the one the platform ships.
+
+The images land in `.pio/build/xiao_c5/` (`bootloader.bin`, `partitions.bin`, `firmware.bin`, plus a
+merged `firmware.factory.bin`). All receiver parameters still come from `sdkconfig.defaults`;
+PlatformIO writes the generated configuration to the git-ignored `sdkconfig.xiao_c5`, so delete that
+file after editing the defaults. To flash, use `python tools/flash_pio.py` (see Step 3, Option E).
+
+The Docker and native ESP-IDF builds produce three critical binaries in `build/`:
 - `build/bootloader/bootloader.bin` (at flash offset `0x2000`)
 - `build/partition_table/partition-table.bin` (at flash offset `0x8000`)
 - `build/c5vrx3.bin` (at flash offset `0x10000`)
@@ -307,6 +329,17 @@ python tools/flash.py COM10
 idf.py -p COM10 flash
 ```
 
+#### Option E: PlatformIO Build (Manual Download Mode)
+Flashes the images from `.pio/build/<env>/`:
+```bash
+python tools/flash_pio.py [ENV] [PORT]
+```
+The XIAO's USB-Serial/JTAG auto-reset is unreliable while C5VRX firmware is running, so the script
+writes the flash straight away if the chip is already in the ROM bootloader, and otherwise asks you
+to unplug the board, hold BOOT, plug it back in and release BOOT. It always writes DIO at 80 MHz
+(the XIAO's flash does not boot in QIO) and never asserts DTR/RTS. `pio run -t upload` works too
+when the board is already in download mode.
+
 ---
 
 ### Step 4: Interactive Serial Monitor & Diagnostics
@@ -334,6 +367,7 @@ C5VRX/
 +-- web/                             # Browser Web Serial flasher
 +-- sdkconfig.defaults               # ESP-IDF defaults
 +-- partitions.csv                   # Flash partition table
++-- platformio.ini                   # Optional PlatformIO build of the same ESP-IDF project
 ```
 
 ---
