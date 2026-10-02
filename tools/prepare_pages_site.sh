@@ -10,6 +10,34 @@ rm -rf "${OUT_DIR}"
 mkdir -p "${OUT_DIR}/firmware"
 cp -a "${ROOT_DIR}/web/." "${OUT_DIR}/"
 
+# HTML and modules can otherwise be served from different cached deployments.
+# Fingerprint dependencies first, then app.js, so a fresh HTML page always loads
+# the matching scripts even when a browser cached the previous flasher.
+python3 - "${OUT_DIR}" <<'PY'
+import hashlib
+import re
+import sys
+from pathlib import Path
+
+site = Path(sys.argv[1])
+
+def versioned(name):
+    digest = hashlib.sha256((site / name).read_bytes()).hexdigest()[:16]
+    return f"{name}?v={digest}"
+
+app = site / "app.js"
+source = app.read_text()
+for name in ("esptool.js", "serial-terminal.js"):
+    source = source.replace(f"'./{name}'", f"'./{versioned(name)}'")
+app.write_text(source)
+html = site / "index.html"
+source = html.read_text()
+for name in ("app.js", "style.css"):
+    source = re.sub(r'((?:src|href)=")' + re.escape(name) + r'(?:\\?[^"]*)?"',
+                    lambda match: match[1] + versioned(name) + '"', source)
+html.write_text(source)
+PY
+
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "${tmp_dir}"' EXIT
 
