@@ -153,3 +153,9 @@ header :focus-visible { outline-color:#2369c7; }
  .workspace main { padding-top:24px; }
 }
 @media(max-width:540px) { .workspace { padding:0 16px; } }
+
+/* Hardware purchase link and adjacent affiliate disclosure. */
+.hardware-purchase { margin-bottom:24px; padding:16px; background:#191c20; border:1px solid #343940; }
+.hardware-purchase a { display:inline-flex; align-items:center; min-height:44px; color:#81aaf0; font-size:1rem; font-weight:600; overflow-wrap:anywhere; }
+.hardware-purchase a:hover { color:#b6cfff; }
+.hardware-purchase p { margin:4px 0 0; color:#a2a9b2; font-size:.875rem; }
