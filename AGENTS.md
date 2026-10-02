@@ -202,6 +202,33 @@ Start with `legacy/c5vrx2/main/Kconfig.projbuild`, its `main/*.bsasm`,
 `docs/continuous-iq-findings.md`, `docs/issue-17-true40-cadence-and-interleaved-phase5.md`
 and `docs/monotone-linear40-and-reconstruction.md`.
 
+### Public evidence: continuous IQ/video pipeline and Espressif EOF issue
+
+Preserve the attribution and exact scope of
+[espressif/esp-idf#19091](https://github.com/espressif/esp-idf/issues/19091)
+when describing or adapting C5VRX's continuous-stream work:
+
+- **16 September 2026:** Leon Beekveldt (Twotoz) reported that steady-state
+  eight-bit PARLIO TX / GDMA loops with BitScrambler emitted a real EOF boundary
+  on every ring wrap. A live-hardware A/B test cleared cyclic `suc_eof` and
+  eliminated the observed wrap-related video artifacts.
+- **17 September 2026:** Espressif's maintainer
+  [confirmed “Your analysis is correct.” and supplied a driver patch](https://github.com/espressif/esp-idf/issues/19091#issuecomment-5712811733).
+  EOF was used for AHB-GDMA buffer-switch notifications, but BitScrambler also
+  interpreted it as a stream boundary. The general driver solution suppresses
+  EOF in steady state and emits it once when switching buffers; do not remove
+  required switch notifications indiscriminately.
+- Credit C5VRX by Twotoz and the contributors for the investigation, live
+  workaround and application evidence; credit Espressif for its explanation and
+  supplied driver patch. This is a specific C5VRX-2/3 continuous hardware
+  RF-to-video contribution, not a claim of sole ownership of RF dump technology
+  or worldwide priority for all continuous ESP32 SDR methods.
+- Keep three evidence levels separate: autonomous RF writer (5/6 September),
+  first live NTSC chain (9 September), and removal of cyclic output EOF seams
+  (issue above). See `docs/continuous-iq-findings.md` and
+  `docs/pr-derived-findings.md`. Output EOF suppression alone does not prove
+  sample-perfect RF acquisition across every private dump-SRAM boundary.
+
 ### C5VRX-3: current hardware dataplane and demodulator investigations
 
 The root `main` dataplane is MODEM_DIAG -> PARLIO RX40 -> raw cyclic IQ ring ->
