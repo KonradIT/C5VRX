@@ -1,24 +1,46 @@
 name: C5VRX-4 Experimental Build
 on:
   workflow_dispatch:
-  pull_request:
+  push:
+    branches: [main]
     paths:
       - 'experiments/c5vrx-4/**'
+      - '!**/*.md'
       - 'main/**'
-      - 'sdkconfig.defaults'
+      - '!**/*.md'
+      - 'tools/firmware_input_hash.py'
+      - 'sdkconfig*'
       - 'partitions.csv'
+      - 'dependencies.lock'
+      - 'managed_components/**'
+      - '.github/workflows/c5vrx4.yml'
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    paths:
+      - 'experiments/c5vrx-4/**'
+      - '!**/*.md'
+      - 'main/**'
+      - '!**/*.md'
+      - 'tools/firmware_input_hash.py'
+      - 'sdkconfig*'
+      - 'partitions.csv'
+      - 'dependencies.lock'
+      - 'managed_components/**'
       - '.github/workflows/c5vrx4.yml'
 permissions:
   contents: read
 concurrency:
-  group: c5vrx4-${{ github.event.pull_request.number || github.ref }}
+  group: c5vrx4-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
   build:
+    if: github.event_name != 'pull_request' || github.event.action != 'closed'
     runs-on: ubuntu-latest
     container: espressif/idf:v6.0.2
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Generate experimental program
         run: python3 experiments/c5vrx-4/generate_pipeline.py
       - name: Build isolated C5VRX-4 target
@@ -27,14 +49,89 @@ jobs:
         run: |
           . "$IDF_PATH/export.sh"
           idf.py -DIDF_TARGET=esp32c5 build
+      - name: Package alpha firmware for web flashing
+        shell: bash
+        run: |
+          . "$IDF_PATH/export.sh"
+          mkdir -p release
+          cp experiments/c5vrx-4/build/c5vrx4.bin release/
+          cp experiments/c5vrx-4/build/bootloader/bootloader.bin release/
+          cp experiments/c5vrx-4/build/partition_table/partition-table.bin release/
+          cp experiments/c5vrx-4/build/flasher_args.json release/
+          esptool.py --chip esp32c5 merge_bin -o release/c5vrx4_merged.bin \
+            --flash_mode dio --flash_size 8MB --flash_freq 80m \
+            0x2000 release/bootloader.bin \
+            0x8000 release/partition-table.bin \
+            0x10000 release/c5vrx4.bin
+          printf '%s\n' '${{ github.event.pull_request.head.sha || github.sha }}' > release/COMMIT
+          python3 tools/firmware_input_hash.py 4 > release/FIRMWARE_INPUT_SHA
+          cd release
+          sha256sum * > SHA256SUMS
       - name: Upload experimental firmware
         uses: actions/upload-artifact@v4
         with:
           name: c5vrx4-experimental-${{ github.event.pull_request.head.sha || github.sha }}
           if-no-files-found: error
-          path: |
-            experiments/c5vrx-4/build/c5vrx4.bin
-            experiments/c5vrx-4/build/c5vrx4.elf
-            experiments/c5vrx-4/build/bootloader/bootloader.bin
-            experiments/c5vrx-4/build/partition_table/partition-table.bin
-            experiments/c5vrx-4/build/flasher_args.json
+          path: release/
+  publish-alpha:
+    needs: build
+    # Fork builds never receive write-capable publication. Manual publication
+    # is limited to main; unmerged builds have their own PR channel.
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.event.action != 'closed' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: c5vrx4-experimental-${{ github.event.pull_request.head.sha || github.sha }}
+          path: release/
+      - name: Publish C5VRX-4 alpha channel
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BUILD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="c5vrx4-alpha"
+          title="C5VRX-4 Alpha — latest main"
+          if [[ -n "$PR_NUMBER" ]]; then
+            tag="c5vrx4-pr-${PR_NUMBER}"
+            title="C5VRX-4 Alpha — PR #${PR_NUMBER} / unmerged"
+          fi
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            previous="$(mktemp -d)"
+            if gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern FIRMWARE_INPUT_SHA --dir "$previous" &&
+               cmp -s "$previous/FIRMWARE_INPUT_SHA" release/FIRMWARE_INPUT_SHA; then
+              echo "Firmware inputs unchanged; keeping existing alpha build."
+              rm -rf "$previous"
+              exit 0
+            fi
+            rm -rf "$previous"
+            gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag
+          fi
+          gh release create "$tag" release/* --repo "$GITHUB_REPOSITORY" \
+            --target "$BUILD_SHA" --title "$title" --prerelease --latest=false \
+            --notes "Experimental C5VRX-4 firmware at ${BUILD_SHA}. Range improvement is not verified. Use Full firmware when switching from C5VRX-3."
+  cleanup-alpha:
+    if: >-
+      github.event_name == 'pull_request' && github.event.action == 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Remove closed alpha PR channel
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          tag="c5vrx4-pr-${PR_NUMBER}"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag
+          fi

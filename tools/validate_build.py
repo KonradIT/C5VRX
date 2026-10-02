@@ -552,7 +552,7 @@ check("web flasher prefers same-origin Pages firmware mirror",
       "corsproxy.io" not in web_app)
 check("Pages deploy builds firmware mirror from trusted main",
       'workflow_run:' in web_workflow and
-      'workflows: ["C5VRX-3 Production CI"]' in web_workflow and
+      '"C5VRX-3 Production CI"' in web_workflow and '"C5VRX-4 Experimental Build"' in web_workflow and
       "ref: main" in web_workflow and
       "tools/prepare_pages_site.sh pages-site" in web_workflow and
       "path: pages-site/" in web_workflow)

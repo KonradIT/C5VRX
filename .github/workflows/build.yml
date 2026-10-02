@@ -3,11 +3,31 @@ name: C5VRX-3 Production CI
 on:
   push:
     branches: [main, "codex/**", "feat/**", "fix/**"]
+    paths:
+      - "main/**"
+      - "!**/*.md"
+      - "tools/firmware_input_hash.py"
+      - "CMakeLists.txt"
+      - "sdkconfig*"
+      - "partitions.csv"
+      - "dependencies.lock"
+      - "managed_components/**"
+      - ".github/workflows/build.yml"
   pull_request:
     # Include stacked development PRs so their mutable pr-N firmware channel
     # is created just like a PR targeting main.
     branches: [main, "feat/**", "fix/**", "codex/**"]
     types: [opened, synchronize, reopened, closed]
+    paths:
+      - "main/**"
+      - "!**/*.md"
+      - "tools/firmware_input_hash.py"
+      - "CMakeLists.txt"
+      - "sdkconfig*"
+      - "partitions.csv"
+      - "dependencies.lock"
+      - "managed_components/**"
+      - ".github/workflows/build.yml"
 
 # A merged PR emits both pull_request:closed and push:main. GitHub reports
 # github.ref=refs/heads/main for the merged/closed PR event too, so grouping
@@ -224,6 +244,7 @@ jobs:
             printf '%s\n' "${{ needs.version.outputs.version }}" > release/VERSION
           fi
 
+          python3 tools/firmware_input_hash.py 3 > release/FIRMWARE_INPUT_SHA
           cd release
           sha256sum * > SHA256SUMS
 
@@ -263,6 +284,14 @@ jobs:
           tag="pr-${PR_NUMBER}"
 
           if gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            previous="$(mktemp -d)"
+            if gh release download "${tag}" --repo "${GITHUB_REPOSITORY}" --pattern FIRMWARE_INPUT_SHA --dir "$previous" &&
+               cmp -s "$previous/FIRMWARE_INPUT_SHA" release/FIRMWARE_INPUT_SHA; then
+              echo "Firmware inputs unchanged; keeping existing PR build."
+              rm -rf "$previous"
+              exit 0
+            fi
+            rm -rf "$previous"
             gh release delete "${tag}" --repo "${GITHUB_REPOSITORY}" --yes --cleanup-tag
           fi
 

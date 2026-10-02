@@ -8,7 +8,7 @@ on:
       - "tools/prepare_pages_site.sh"
       - ".github/workflows/deploy-web.yml"
   workflow_run:
-    workflows: ["C5VRX-3 Production CI"]
+    workflows: ["C5VRX-3 Production CI", "C5VRX-4 Experimental Build"]
     types: [completed]
   workflow_dispatch:
 

@@ -55,7 +55,7 @@ summary { cursor:pointer; color:#57606a; min-height:32px; }
 .preview { font-size:11px; color:#7d8590; margin:28px 0 0; }
 footer { max-width:808px; margin:0 auto; padding:0 24px 24px; color:#8a919a; font-size:11px; }
 [hidden] { display:none !important; }
-@media(max-width:540px) { .header-inner { padding:14px 16px; } .logo { width:124px; } .links { gap:14px; font-size:12px; } main { padding:24px 16px; } .panel { padding:18px; } .terminal-panel { padding:0; } .sources { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; } .source-button { padding:8px 4px; font-size:12px; } .select-row { flex-wrap:wrap; } .select-row select { flex-basis:100%; } .select-row button { width:100%; } input,select { font-size:16px; } .flash-actions > button { flex:1; } .terminal-toolbar { padding:12px; } .terminal-output { height:320px; padding:16px; } .command-row { padding:12px; } .terminal-options { align-items:start; } footer { padding:0 16px 20px; } }
+@media(max-width:540px) { .header-inner { padding:14px 16px; } .logo { width:124px; } .links { gap:14px; font-size:12px; } main { padding:24px 16px; } .panel { padding:18px; } .terminal-panel { padding:0; } .sources { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; } .source-button { padding:8px 4px; font-size:12px; } .select-row { flex-wrap:wrap; } .select-row select { flex-basis:100%; } .select-row button { width:100%; } input,select { font-size:16px; } .flash-actions > button { flex:1; } .terminal-toolbar { padding:12px; } .terminal-output { height:320px; padding:16px; } .command-row { padding:12px; } .terminal-options { align-items:start; } footer { padding:0 16px 20px; } }
 
 .shortcuts { margin-bottom:20px; }
 .command-group { margin:0 0 14px; }

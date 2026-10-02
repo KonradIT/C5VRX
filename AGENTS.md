@@ -433,7 +433,7 @@ the project explicitly changes hosting architecture.
 - `.github/workflows/deploy-web.yml` is the only production web deployment.
 - It always checks out trusted `main` before constructing the Pages artifact.
 - It publishes `web/` plus a generated same-origin `firmware/` mirror.
-- It runs for web changes on `main`, manually, and after successful Production
+- It runs for web changes on `main`, manually, and after successful C5VRX-4 or Production
   CI so new/updated/removed PR builds and new releases refresh the mirror.
 - Browser release discovery should use the generated
   `firmware/releases.json` manifest first.
@@ -441,7 +441,9 @@ the project explicitly changes hosting architecture.
 ### Normal release versioning
 
 `.github/workflows/build.yml` only mints semantic versions on a **push to
-`main`**. Development branches and PR builds do not receive a normal version.
+`main`** that changes production firmware inputs. Push and PR path allowlists
+cover `main/`, root build/configuration files and the production workflow.
+Website, documentation and isolated C5VRX-4 changes do not mint C5VRX-3 releases. Development branches and PR builds do not receive a normal version.
 
 The next version is derived from commits since the latest stable tag:
 
@@ -519,9 +521,21 @@ PR commit
   -> user explicitly confirms experimental flash
 ```
 
+The **C5VRX-4 Alpha** tab contains only `c5vrx4-alpha` (latest main) and
+`c5vrx4-pr-N` prereleases, published by `c5vrx4.yml` with application, merged
+firmware, bootloader, partitions, flash arguments, commit SHA and checksums.
+PR builds use the exact PR head; fork builds cannot publish. Closing a PR
+removes its alpha channel. Main publication runs only for C5VRX-4 firmware
+input changes (or a manual main build). Alpha assets use the same Pages mirror
+and explicit experimental-flash confirmation as PR builds. Switching
+generations should use Full firmware. Mutable PR and alpha publication compare
+`FIRMWARE_INPUT_SHA` from `tools/firmware_input_hash.py`; identical tracked
+firmware inputs keep the existing release even when the PR head changes for
+website/docs work. The hash excludes website, Markdown and version stamping.
+
 The **Releases** tab contains semantic-version releases; **PR Builds** contains
 only `pr-<number>` prereleases. The Pages mirror keeps the newest 20 semantic
-firmware releases plus all currently active PR prereleases.
+firmware releases plus the newest three C5VRX-3 PR prereleases and all C5VRX-4 alpha channels.
 
 A web UI change made in a PR is still not deployed until merged into `main`.
 PR firmware can trigger a Pages **mirror refresh**, but that refresh checks out

@@ -31,7 +31,10 @@ jq '
       | sort_by(.published_at)
       | reverse
       | .[:3]) as $prs
-  | ($versions + $prs)
+  | ($all
+      | map(select(.prerelease == true and (.tag_name | test("^c5vrx4-(alpha|pr-[0-9]+)$"))))
+      | sort_by(.published_at) | reverse) as $alphas
+  | ($versions + $prs + $alphas)
 ' "${tmp_dir}/all-releases.json" > "${tmp_dir}/selected-releases.json"
 
 count="$(jq 'length' "${tmp_dir}/selected-releases.json")"

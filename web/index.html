@@ -70,6 +70,7 @@
           <div class="sources" role="group" aria-label="Firmware source">
             <button id="tabGithub" aria-pressed="true" class="source-button active">Releases</button>
             <button id="tabPr" aria-pressed="false" class="source-button">PR Builds</button>
+            <button id="tabAlpha" aria-pressed="false" class="source-button">C5VRX-4 Alpha</button>
             <button id="tabLocal" aria-pressed="false" class="source-button">Local File</button>
           </div>
 
@@ -162,6 +163,57 @@
             <div class="field">
               <label for="selectPrPackageType">Package</label>
               <select id="selectPrPackageType" class="form-control">
+                <option value="merged">Full firmware</option>
+                <option value="app_only">App only</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- C5VRX-4 Alpha Pane -->
+          <div id="paneAlpha" class="tab-pane">
+            <div id="alphaBuildWarning" class="warning-box">
+              <strong>⚠ C5VRX-4 / Alpha firmware <span id="alphaBuildNumber">
+</span>
+</strong>
+              <span>Test the experimental C5VRX-4 receiver. Alpha builds may be unstable or produce broken video; range improvements are not yet verified. Choose the latest main alpha or an unmerged PR build. Use Full firmware when switching from C5VRX-3.</span>
+            </div>
+
+            <div class="field">
+              <label for="selectAlphaBuild">Alpha build</label>
+              <div class="select-row">
+                <select id="selectAlphaBuild" class="form-control">
+                  <option value="">Loading alpha builds…</option>
+                </select>
+                <button id="btnRefreshAlphaBuilds" class="action" title="Refresh alpha builds">
+                  Refresh
+                </button>
+              </div>
+            </div>
+
+            <details class="release-metadata"><summary>Build details</summary>
+<div id="alphaBuildDetails" class="info-box" style="display: none;">
+              <div class="info-row">
+                <span class="info-label">Build:</span>
+                <span class="info-value" id="infoAlphaBuildName">-</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Published:</span>
+                <span class="info-value" id="infoAlphaBuildDate">-</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Tag:</span>
+                <span class="info-value" id="infoAlphaBuildTag">-</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Assets:</span>
+                <span class="info-value" id="infoAlphaBuildAssets">-</span>
+              </div>
+            </div>
+</details>
+
+            <div class="field">
+              <label for="selectAlphaPackageType">Package</label>
+              <select id="selectAlphaPackageType" class="form-control">
                 <option value="merged">Full firmware</option>
                 <option value="app_only">App only</option>
               </select>

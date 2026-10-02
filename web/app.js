@@ -8,6 +8,13 @@ const btnFlash = document.getElementById('btnFlash');
 const unsupportedWarning = document.getElementById('unsupportedWarning');
 
 const tabGithub = document.getElementById('tabGithub');
+const tabAlpha = document.getElementById('tabAlpha');
+const paneAlpha = document.getElementById('paneAlpha');
+const selectAlphaBuild = document.getElementById('selectAlphaBuild');
+const selectAlphaPackageType = document.getElementById('selectAlphaPackageType');
+const btnRefreshAlphaBuilds = document.getElementById('btnRefreshAlphaBuilds');
+const alphaBuildDetails = document.getElementById('alphaBuildDetails');
+
 const tabPr = document.getElementById('tabPr');
 const tabLocal = document.getElementById('tabLocal');
 const paneGithub = document.getElementById('paneGithub');
@@ -56,7 +63,7 @@ const consoleOutput = document.getElementById('consoleOutput');
 const btnClearConsole = document.getElementById('btnClearConsole');
 
 // App State
-let activeSource = 'github'; // 'github' | 'pr' | 'local'
+let activeSource = 'github'; // 'github' | 'pr' | 'alpha' | 'local'
 let port = null;
 let transport = null;
 let esploader = null;
@@ -65,6 +72,7 @@ let isConnecting = false;
 let isFlashing = false;
 let githubReleases = [];
 let githubPrBuilds = [];
+let githubAlphaBuilds = [];
 let localFileBinary = null;
 let localFileNameStr = '';
 
@@ -129,12 +137,14 @@ function checkSerialSupport() {
 function activateSource(source) {
   if (isFlashing) return;
   activeSource = source;
-  for (const [button, name] of [[tabGithub, 'github'], [tabPr, 'pr'], [tabLocal, 'local']]) {
+  for (const [button, name] of [[tabGithub, 'github'], [tabPr, 'pr'], [tabAlpha, 'alpha'], [tabLocal, 'local']]) {
     button.setAttribute('aria-pressed', String(source === name));
   }
 
   tabGithub.classList.toggle('active', source === 'github');
   tabPr.classList.toggle('active', source === 'pr');
+  tabAlpha.classList.toggle('active', source === 'alpha');
+  paneAlpha.classList.toggle('active', source === 'alpha');
   tabLocal.classList.toggle('active', source === 'local');
 
   paneGithub.classList.toggle('active', source === 'github');
@@ -145,6 +155,10 @@ function activateSource(source) {
 }
 
 tabGithub.addEventListener('click', () => activateSource('github'));
+tabAlpha.addEventListener('click', () => activateSource('alpha'));
+btnRefreshAlphaBuilds.addEventListener('click', () => fetchReleases());
+selectAlphaBuild.addEventListener('change', () => onAlphaBuildSelected());
+
 tabPr.addEventListener('click', () => activateSource('pr'));
 tabLocal.addEventListener('click', () => activateSource('local'));
 
@@ -208,6 +222,7 @@ function handleLocalFile(file) {
 async function fetchReleases() {
   selectRelease.innerHTML = '<option value="">Fetching firmware index...</option>';
   selectPrBuild.innerHTML = '<option value="">Fetching PR builds...</option>';
+  selectAlphaBuild.innerHTML = '<option value="">Fetching alpha builds...</option>';
 
   let data = null;
   try {
@@ -250,10 +265,47 @@ async function fetchReleases() {
 
   githubReleases = productionReleases;
   githubPrBuilds = prBuilds;
+  githubAlphaBuilds = data.filter(rel => rel.prerelease && /^c5vrx4-(?:alpha|pr-[0-9]+)$/.test(rel.tag_name || ""))
+    .sort((a, b) => (Number(b.tag_name === "c5vrx4-alpha") - Number(a.tag_name === "c5vrx4-alpha")) || new Date(b.published_at || 0) - new Date(a.published_at || 0));
   log(`Available: ${githubReleases.length} versioned release(s), ${githubPrBuilds.length} experimental PR build(s).`);
 
   populateReleaseDropdown();
   populatePrBuildDropdown();
+  populateAlphaBuildDropdown();
+  updateFlashButtonState();
+}
+
+function populateAlphaBuildDropdown() {
+  selectAlphaBuild.replaceChildren();
+  githubAlphaBuilds.forEach((rel, index) => {
+    const opt = document.createElement('option');
+    opt.value = index;
+    opt.textContent = rel.tag_name === 'c5vrx4-alpha'
+      ? 'C5VRX-4 Alpha — latest main'
+      : `C5VRX-4 Alpha — PR #${rel.tag_name.split('-').pop()} / unmerged`;
+    selectAlphaBuild.appendChild(opt);
+  });
+  selectAlphaBuild.disabled = githubAlphaBuilds.length === 0;
+  if (githubAlphaBuilds.length) {
+    selectAlphaBuild.value = '0';
+    onAlphaBuildSelected();
+  } else {
+    selectAlphaBuild.innerHTML = '<option value="">No alpha builds published yet</option>';
+    alphaBuildDetails.style.display = 'none';
+  }
+}
+
+function onAlphaBuildSelected() {
+  const rel = githubAlphaBuilds[Number(selectAlphaBuild.value)];
+  if (!rel) return;
+  alphaBuildDetails.style.display = 'block';
+  for (const [id, value] of [
+    ['infoAlphaBuildName', rel.name || rel.tag_name],
+    ['infoAlphaBuildDate', rel.published_at ? new Date(rel.published_at).toLocaleDateString() : 'N/A'],
+    ['infoAlphaBuildTag', rel.tag_name],
+    ['infoAlphaBuildAssets', (rel.assets || []).map(a => a.name).join(', ')]
+  ]) document.getElementById(id).textContent = value;
+  updateFlashButtonState();
 }
 
 function populateReleaseDropdown() {
@@ -359,6 +411,9 @@ function updateFlashButtonState() {
   if (activeSource === 'github') {
     const idx = parseInt(selectRelease.value, 10);
     btnFlash.disabled = !Number.isInteger(idx) || !githubReleases[idx];
+  } else if (activeSource === 'alpha') {
+    const idx = parseInt(selectAlphaBuild.value, 10);
+    btnFlash.disabled = !Number.isInteger(idx) || !githubAlphaBuilds[idx];
   } else if (activeSource === 'pr') {
     const idx = parseInt(selectPrBuild.value, 10);
     btnFlash.disabled = !Number.isInteger(idx) || !githubPrBuilds[idx];
@@ -380,13 +435,16 @@ function getSelectedRemoteBuild() {
       packageType: selectPrPackageType.value
     };
   }
+  if (activeSource === 'alpha') {
+    return { release: githubAlphaBuilds[parseInt(selectAlphaBuild.value, 10)], packageType: selectAlphaPackageType.value };
+  }
   return { release: null, packageType: null };
 }
 
 function findApplicationAsset(assets) {
   // GitHub returns release assets in upload order. Never use the first .bin:
   // bootloader.bin is commonly uploaded before the application image.
-  return assets.find(asset => /^c5vrx(?:3)?\.bin$/i.test(asset.name || '')) ||
+  return assets.find(asset => /^c5vrx(?:[34])?\.bin$/i.test(asset.name || '')) ||
     assets.find(asset => {
       const name = (asset.name || '').toLowerCase();
       return name.endsWith('.bin') &&
@@ -495,6 +553,8 @@ btnFlash.addEventListener('click', async () => {
       return;
     }
   }
+
+  if (activeSource === 'alpha' && !window.confirm('Flash C5VRX-4 Alpha? This experimental firmware may fail to boot or produce broken video. Use Full firmware when switching generations.')) return;
 
   isFlashing = true;
   syncDeviceControls();
@@ -725,7 +785,7 @@ const serialConsole = new SerialTerminal({
 
 function syncDeviceControls() {
   const supported = 'serial' in navigator;
-  for (const control of [tabGithub, tabPr, tabLocal, selectRelease, selectPrBuild, selectPackageType, selectPrPackageType, selectBaud, chkEraseAll, inputLocalFile, inputFlashOffset, btnRefreshReleases, btnRefreshPrBuilds, document.getElementById('btnBrowseFile')]) {
+  for (const control of [tabGithub, tabPr, tabAlpha, tabLocal, selectAlphaBuild, selectAlphaPackageType, btnRefreshAlphaBuilds, selectRelease, selectPrBuild, selectPackageType, selectPrPackageType, selectBaud, chkEraseAll, inputLocalFile, inputFlashOffset, btnRefreshReleases, btnRefreshPrBuilds, document.getElementById('btnBrowseFile')]) {
     control.disabled = isFlashing;
   }
   const terminalConnected = serialConsole.state === 'connected';
