@@ -154,8 +154,13 @@ header :focus-visible { outline-color:#2369c7; }
 }
 @media(max-width:540px) { .workspace { padding:0 16px; } }
 
-/* Hardware purchase link and adjacent affiliate disclosure. */
-.hardware-purchase { margin-bottom:24px; padding:16px; background:#191c20; border:1px solid #343940; }
-.hardware-purchase a { display:inline-flex; align-items:center; min-height:44px; color:#81aaf0; font-size:1rem; font-weight:600; overflow-wrap:anywhere; }
-.hardware-purchase a:hover { color:#b6cfff; }
-.hardware-purchase p { margin:4px 0 0; color:#a2a9b2; font-size:.875rem; }
+/* Compact hardware card beneath the tools. */
+.hardware-purchase { display:flex; align-items:center; justify-content:space-between; gap:20px; margin:24px 0 0; padding:14px 18px; background:#191c20; border:1px solid #343940; }
+.hardware-copy { min-width:0; flex:1; }
+.hardware-title { margin:0 0 8px; font-size:.875rem; font-weight:600; color:#e5e7eb; }
+.hardware-purchase .amazon-button { display:inline-flex; align-items:center; justify-content:center; min-height:36px; padding:7px 14px; background:#3269c5; border:1px solid #3269c5; color:#fff; font-size:.875rem; font-weight:600; text-decoration:none; }
+.hardware-purchase .amazon-button:hover { background:#3c77d7; border-color:#3c77d7; }
+.hardware-purchase .affiliate-note { margin:8px 0 0; color:#a2a9b2; font-size:.75rem; line-height:1.5; }
+.hardware-photo { position:relative; flex:0 0 52px; height:70px; overflow:hidden; }
+.hardware-photo img { position:absolute; width:142px; max-width:none; height:auto; left:-43px; top:-18px; mix-blend-mode:screen; }
+@media(max-width:540px) { .hardware-purchase { padding:12px 14px; gap:14px; } }
