@@ -521,14 +521,20 @@ PR commit
   -> user explicitly confirms experimental flash
 ```
 
-The **C5VRX-4 Alpha** tab contains only `c5vrx4-alpha` (latest main) and
+The **C5VRX-4 Alpha** tab contains immutable `c5vrx4-v4.0.0-alpha.N` main
+releases and
 `c5vrx4-pr-N` prereleases, published by `c5vrx4.yml` with application, merged
 firmware, bootloader, partitions, flash arguments, commit SHA and checksums.
 PR builds use the exact PR head; fork builds cannot publish. Closing a PR
 removes its alpha channel. Main publication runs only for C5VRX-4 firmware
 input changes (or a manual main build). Alpha assets use the same Pages mirror
 and explicit experimental-flash confirmation as PR builds. Switching
-generations should use Full firmware. Mutable PR and alpha publication compare
+generations should use Full firmware. Main alpha versions increment independently from C5VRX-3 via
+`tools/c5vrx4_version.py`, and are stamped into ESP-IDF metadata and `VERSION`.
+A rerun reuses the same commit tag; published version assets are never replaced.
+The Pages mirror retains the newest 20 versioned alphas. Legacy
+`c5vrx4-alpha` is a fallback until the first versioned alpha exists.
+Mutable PR and versioned alpha publication compare
 `FIRMWARE_INPUT_SHA` from `tools/firmware_input_hash.py`; identical tracked
 firmware inputs keep the existing release even when the PR head changes for
 website/docs work. The hash excludes website, Markdown and version stamping.

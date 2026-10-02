@@ -62,7 +62,10 @@ jq '
   | ($all
       | map(select(.prerelease == true and (.tag_name | test("^c5vrx4-(alpha|pr-[0-9]+)$"))))
       | sort_by(.published_at) | reverse) as $alphas
-  | ($versions + $prs + $alphas)
+  | ($all
+      | map(select(.prerelease == true and (.tag_name | test("^c5vrx4-v4\\.[0-9]+\\.[0-9]+-alpha\\.[0-9]+$"))))
+      | sort_by(.published_at) | reverse | .[:20]) as $alpha_versions
+  | ($versions + $prs + $alpha_versions + $alphas)
 ' "${tmp_dir}/all-releases.json" > "${tmp_dir}/selected-releases.json"
 
 count="$(jq 'length' "${tmp_dir}/selected-releases.json")"

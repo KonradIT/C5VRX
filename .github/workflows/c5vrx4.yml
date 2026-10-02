@@ -9,6 +9,7 @@ on:
       - 'main/**'
       - '!**/*.md'
       - 'tools/firmware_input_hash.py'
+      - 'tools/c5vrx4_version.py'
       - 'sdkconfig*'
       - 'partitions.csv'
       - 'dependencies.lock'
@@ -22,6 +23,7 @@ on:
       - 'main/**'
       - '!**/*.md'
       - 'tools/firmware_input_hash.py'
+      - 'tools/c5vrx4_version.py'
       - 'sdkconfig*'
       - 'partitions.csv'
       - 'dependencies.lock'
@@ -33,7 +35,37 @@ concurrency:
   group: c5vrx4-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
+  version:
+    if: github.event_name != 'pull_request' || github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Resolve independent C5VRX-4 alpha version
+        id: resolve
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "$PR_NUMBER" ]]; then
+            echo "version=4.0.0-alpha-pr.${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+            echo "tag=c5vrx4-pr-${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+          elif [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
+            result="$(python3 tools/c5vrx4_version.py)"
+            echo "version=$(jq -r .version <<< "$result")" >> "$GITHUB_OUTPUT"
+            echo "tag=$(jq -r .tag <<< "$result")" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=4.0.0-alpha-dev" >> "$GITHUB_OUTPUT"
+            echo "tag=" >> "$GITHUB_OUTPUT"
+          fi
   build:
+    needs: version
     if: github.event_name != 'pull_request' || github.event.action != 'closed'
     runs-on: ubuntu-latest
     container: espressif/idf:v6.0.2
@@ -48,7 +80,7 @@ jobs:
         working-directory: experiments/c5vrx-4
         run: |
           . "$IDF_PATH/export.sh"
-          idf.py -DIDF_TARGET=esp32c5 build
+          idf.py -DIDF_TARGET=esp32c5 -DC5VRX4_VERSION="${{ needs.version.outputs.version }}" build
       - name: Package alpha firmware for web flashing
         shell: bash
         run: |
@@ -65,6 +97,7 @@ jobs:
             0x10000 release/c5vrx4.bin
           printf '%s\n' '${{ github.event.pull_request.head.sha || github.sha }}' > release/COMMIT
           python3 tools/firmware_input_hash.py 4 > release/FIRMWARE_INPUT_SHA
+          printf '%s\n' '${{ needs.version.outputs.version }}' > release/VERSION
           cd release
           sha256sum * > SHA256SUMS
       - name: Upload experimental firmware
@@ -74,7 +107,7 @@ jobs:
           if-no-files-found: error
           path: release/
   publish-alpha:
-    needs: build
+    needs: [version, build]
     # Fork builds never receive write-capable publication. Manual publication
     # is limited to main; unmerged builds have their own PR channel.
     if: >-
@@ -95,29 +128,47 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BUILD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          VERSION: ${{ needs.version.outputs.version }}
+          VERSION_TAG: ${{ needs.version.outputs.tag }}
         shell: bash
         run: |
           set -euo pipefail
-          tag="c5vrx4-alpha"
-          title="C5VRX-4 Alpha — latest main"
+          tag="$VERSION_TAG"
+          title="C5VRX-4 v${VERSION} — Alpha"
           if [[ -n "$PR_NUMBER" ]]; then
-            tag="c5vrx4-pr-${PR_NUMBER}"
             title="C5VRX-4 Alpha — PR #${PR_NUMBER} / unmerged"
           fi
-          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          # Only PR channels may be replaced. Versioned main releases are immutable.
+          if [[ -z "$PR_NUMBER" ]] && gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             previous="$(mktemp -d)"
-            if gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern FIRMWARE_INPUT_SHA --dir "$previous" &&
+            gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern COMMIT --dir "$previous"
+            test "$(cat "$previous/COMMIT")" = "$BUILD_SHA"
+            rm -rf "$previous"
+            echo "Version already published for this commit; leaving it unchanged."
+            exit 0
+          fi
+          previous_tag="$tag"
+          if [[ -z "$PR_NUMBER" ]]; then
+            previous_tag="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName,isDraft \
+              | jq -r '.[] | select(.isDraft == false) | .tagName' \
+              | grep -E '^c5vrx4-v4\.[0-9]+\.[0-9]+-alpha\.[0-9]+$' | sort -V | tail -1 || true)"
+          fi
+          if [[ -n "$previous_tag" ]] && gh release view "$previous_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            previous="$(mktemp -d)"
+            if gh release download "$previous_tag" --repo "$GITHUB_REPOSITORY" --pattern FIRMWARE_INPUT_SHA --dir "$previous" &&
                cmp -s "$previous/FIRMWARE_INPUT_SHA" release/FIRMWARE_INPUT_SHA; then
               echo "Firmware inputs unchanged; keeping existing alpha build."
               rm -rf "$previous"
               exit 0
             fi
             rm -rf "$previous"
-            gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag
+            if [[ -n "$PR_NUMBER" ]]; then
+              gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag
+            fi
           fi
           gh release create "$tag" release/* --repo "$GITHUB_REPOSITORY" \
             --target "$BUILD_SHA" --title "$title" --prerelease --latest=false \
-            --notes "Experimental C5VRX-4 firmware at ${BUILD_SHA}. Range improvement is not verified. Use Full firmware when switching from C5VRX-3."
+            --notes "C5VRX-4 ${VERSION} at ${BUILD_SHA}. Range improvement is not verified. Use Full firmware when switching from C5VRX-3."
   cleanup-alpha:
     if: >-
       github.event_name == 'pull_request' && github.event.action == 'closed' &&

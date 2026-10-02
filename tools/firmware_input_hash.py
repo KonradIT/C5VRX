@@ -15,7 +15,8 @@ def firmware_input(path, generation):
                         'tools/firmware_input_hash.py')
             or path.startswith('sdkconfig')
             or path == f'.github/workflows/{"build" if generation == "3" else "c5vrx4"}.yml'
-            or (generation == '4' and path.startswith('experiments/c5vrx-4/')))
+            or (generation == '4' and (path.startswith('experiments/c5vrx-4/')
+                                      or path == 'tools/c5vrx4_version.py')))
 
 def main():
     generation = sys.argv[1]

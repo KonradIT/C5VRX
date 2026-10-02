@@ -265,8 +265,11 @@ async function fetchReleases() {
 
   githubReleases = productionReleases;
   githubPrBuilds = prBuilds;
-  githubAlphaBuilds = data.filter(rel => rel.prerelease && /^c5vrx4-(?:alpha|pr-[0-9]+)$/.test(rel.tag_name || ""))
-    .sort((a, b) => (Number(b.tag_name === "c5vrx4-alpha") - Number(a.tag_name === "c5vrx4-alpha")) || new Date(b.published_at || 0) - new Date(a.published_at || 0));
+  githubAlphaBuilds = data.filter(rel => rel.prerelease && /^c5vrx4-(?:alpha|pr-[0-9]+|v4\.[0-9]+\.[0-9]+-alpha\.[0-9]+)$/.test(rel.tag_name || ""))
+    .sort((a, b) => (Number(/^c5vrx4-pr-/.test(a.tag_name)) - Number(/^c5vrx4-pr-/.test(b.tag_name))) || new Date(b.published_at || 0) - new Date(a.published_at || 0));
+  if (githubAlphaBuilds.some(rel => rel.tag_name.startsWith("c5vrx4-v"))) {
+    githubAlphaBuilds = githubAlphaBuilds.filter(rel => rel.tag_name !== "c5vrx4-alpha");
+  }
   log(`Available: ${githubReleases.length} versioned release(s), ${githubPrBuilds.length} experimental PR build(s).`);
 
   populateReleaseDropdown();
@@ -280,7 +283,9 @@ function populateAlphaBuildDropdown() {
   githubAlphaBuilds.forEach((rel, index) => {
     const opt = document.createElement('option');
     opt.value = index;
-    opt.textContent = rel.tag_name === 'c5vrx4-alpha'
+    opt.textContent = rel.tag_name.startsWith('c5vrx4-v')
+      ? `C5VRX-4 ${rel.tag_name.slice('c5vrx4-'.length)}${index === 0 ? ' (Latest alpha)' : ''}`
+      : rel.tag_name === 'c5vrx4-alpha'
       ? 'C5VRX-4 Alpha — latest main'
       : `C5VRX-4 Alpha — PR #${rel.tag_name.split('-').pop()} / unmerged`;
     selectAlphaBuild.appendChild(opt);
