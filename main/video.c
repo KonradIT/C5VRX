@@ -229,7 +229,15 @@ static inline void sync_dma_m2c(const void *addr, size_t size)
 
 /* Timing and descriptors are immutable while running; only text pixels change.
  * This raster is never linked to the RF ring. */
+#ifdef C5VRX_VIDEO_LINK_EXPERIMENT
+/* experiments/video-link: no PARLIO TX, so the menu never runs
+ * (video_set_menu_mode() returns at once) and its ~98 KiB raster would only
+ * take DRAM from the frame grabber. A stub keeps the menu code compiling. */
+static DMA_ATTR __attribute__((aligned(64))) uint8_t s_menu_raster_stub[64];
+#define s_menu_raster (*(menu_raster_t *)s_menu_raster_stub)
+#else
 static DMA_ATTR __attribute__((aligned(64))) menu_raster_t s_menu_raster;
+#endif
 /* The two-field PAL/NTSC scatter chain is below 20 KiB. Descriptors are needed
  * only while the standalone menu owns TX, so allocate the bounded maximum from
  * internal AHB-DMA descriptor memory and return it on exit. */
@@ -619,6 +627,76 @@ static uint8_t *get_completed_rx_sample_window(size_t bytes)
         }
     }
     return s_raw_ring;
+}
+
+_Static_assert(VIDEO_RX_RING_BYTES == RAW_RING_BYTES,
+               "video.h VIDEO_RX_RING_BYTES must match the RX ring");
+
+const uint8_t *video_rx_ring(void)
+{
+    return s_raw_ring;
+}
+
+bool video_rx_write_offset(uint32_t *offset)
+{
+    if (s_rx_dma_ch < 0 || s_rx_dma_ch >= 3 || s_rx_dscr_count < 2) return false;
+    uint32_t cur = AHB_DMA.channel[s_rx_dma_ch].in.in_dscr_bf0.val;
+    int idx = find_dscr_index(s_rx_dscr_nodes, s_rx_dscr_count, cur);
+    if (idx < 0 || !s_rx_dscr_nodes[idx].buffer) return false;
+    *offset = (uint32_t)(s_rx_dscr_nodes[idx].buffer - s_raw_ring);
+    return true;
+}
+
+uint32_t video_rx_max_descriptor(void)
+{
+    uint32_t m = 0u;
+    for (int i = 0; i < s_rx_dscr_count; ++i)
+        if (s_rx_dscr_nodes[i].length > m) m = s_rx_dscr_nodes[i].length;
+    return m ? m : 4092u;
+}
+
+size_t video_copy_recent_rx(uint8_t *dst, size_t max_bytes)
+{
+    if (s_rx_dma_ch < 0 || s_rx_dma_ch >= 3 || s_rx_dscr_count < 2) return 0u;
+
+    /* Wait for the GDMA to step onto a new (full-size) descriptor: everything
+     * behind it is complete and the oldest block has ~102 us before the ring
+     * wraps onto it, while one 4092-byte copy takes ~25 us. */
+    uint32_t start_addr = AHB_DMA.channel[s_rx_dma_ch].in.in_dscr_bf0.val;
+    int64_t t0 = esp_timer_get_time();
+    int cur_idx = -1;
+    for (;;) {
+        uint32_t cur = AHB_DMA.channel[s_rx_dma_ch].in.in_dscr_bf0.val;
+        if (cur != start_addr) {
+            cur_idx = find_dscr_index(s_rx_dscr_nodes, s_rx_dscr_count, cur);
+            if (cur_idx >= 0 && s_rx_dscr_nodes[cur_idx].length >= 1024u) break;
+            start_addr = cur;   /* landed on the short tail: wait for the next one */
+        }
+        if (esp_timer_get_time() - t0 > 2000) return 0u;   /* ring stalled */
+    }
+
+    /* The newest completed descriptors that fit, in chain (= time) order,
+     * oldest first. */
+    int first = 0;
+    size_t total = 0u;
+    for (int back = 1; back < s_rx_dscr_count; ++back) {
+        const ring_dscr_node_t *n =
+            &s_rx_dscr_nodes[(cur_idx - back + s_rx_dscr_count) % s_rx_dscr_count];
+        if (!n->buffer || n->length == 0u) continue;
+        if (total + n->length > max_bytes) break;
+        total += n->length;
+        first = back;
+    }
+    size_t copied = 0u;
+    for (int back = first; back >= 1; --back) {
+        const ring_dscr_node_t *n =
+            &s_rx_dscr_nodes[(cur_idx - back + s_rx_dscr_count) % s_rx_dscr_count];
+        if (!n->buffer || n->length == 0u) continue;
+        sync_dma_m2c(n->buffer, n->length);
+        memcpy(dst + copied, n->buffer, n->length);
+        copied += n->length;
+    }
+    return copied;
 }
 
 
@@ -1412,6 +1490,17 @@ static uint8_t apply_rx_gain_tracked(uint8_t gain)
     rf_set_rx_gain(true, next_gain);
     ++s_gain_transition_count;
     return next_gain;
+}
+
+uint8_t video_rx_gain(void)
+{
+    return s_current_gain;
+}
+
+void video_set_rx_gain(uint8_t gain)
+{
+    s_agc_mode = ANALOG_AGC_MANUAL;
+    apply_rx_gain_tracked(gain);
 }
 
 /* Direct Gain V2 is the sole gain writer for its profile. It executes in the
@@ -3933,6 +4022,9 @@ static void menu_draw_exit_page(void)
 
 static void menu_render_menu(void)
 {
+#ifdef C5VRX_VIDEO_LINK_EXPERIMENT
+    return;   /* the raster is a stub: the menu never runs in a link build */
+#endif
     memset(s_menu_raster.ui, UI_ROOT, sizeof(s_menu_raster.ui));
     menu_draw_shell();
 
@@ -4156,6 +4248,10 @@ static void start_menu_tx(void)
 
 static void video_set_menu_mode(bool active)
 {
+#ifdef C5VRX_VIDEO_LINK_EXPERIMENT
+    if (active) printf("[MENU] unavailable in a link build (no PARLIO TX)\n");
+    return;
+#endif
     if (s_pre_q4_probe_active) return;
     if (active && !MENU_RUNTIME_ENABLED) return;
     if (s_menu_active == active) return;
@@ -4704,8 +4800,11 @@ static void analog_agc_task(void *arg)
         uint32_t arc_generation = rf_get_arc_generation();
         if (seen_arc_generation != arc_generation) {
             seen_arc_generation = arc_generation;
+#ifndef C5VRX_VIDEO_LINK_EXPERIMENT
+            /* A link build: the link owns the (manual) gain across its retunes. */
             target_gain = rf_get_arc_survival_gain();
             apply_rx_gain_tracked(target_gain);
+#endif
             target_gain = s_current_gain;
             arc_controller_reset(&arc_controller, rf_get_arc_gain_table(),
                                  target_gain);
@@ -5333,6 +5432,10 @@ static void console_diag_task(void *arg)
 #ifdef C5VRX4_EXPERIMENT
                 if (c5vrx4_console(c)) continue;
 #endif
+#ifdef C5VRX_VIDEO_LINK_EXPERIMENT
+                /* Before the lab keys: the link's keys shadow some of them. */
+                if (video_link_console(c)) continue;
+#endif
                 if (s_gain_sweep.active &&
                     c != 'g' && c != 'l' && c != 'L' && c != '\r' && c != '\n') {
                     printf("C5VRX_GAIN_SWEEP_BUSY command=0x%02x action=ignored\n", (unsigned)c);
@@ -5792,6 +5895,7 @@ esp_err_t video_start(void)
     esp_err_t err;
 
     if ((err = prepare_rx()) != ESP_OK) return err;
+#ifndef C5VRX_VIDEO_LINK_EXPERIMENT
     if ((err = prepare_tx()) != ESP_OK) return err;
 
 #if CONFIG_C5VRX_PHASE8_HR_LIVE_TEST
@@ -5808,6 +5912,7 @@ esp_err_t video_start(void)
     }
 #endif
     start_flight_demodulator();
+#endif
 
     /* Start RX cyclic ring. GDMA begins writing at s_raw_ring[0]. */
     if ((err = start_rx()) != ESP_OK) return err;
@@ -5827,7 +5932,9 @@ esp_err_t video_start(void)
      * The integer-microsecond delay and driver latency need hardware validation. */
     esp_rom_delay_us((RAW_RING_BYTES / 2ULL) * 1000000ULL / IQ_RATE_HZ);
 
+#ifndef C5VRX_VIDEO_LINK_EXPERIMENT
     if ((err = start_tx()) != ESP_OK) return err;
+#endif
 
     /* Discover AHB_DMA channels assigned to PARL_IO (peripheral ID 9) */
     for (int i = 0; i < 3; i++) {
@@ -5858,6 +5965,15 @@ esp_err_t video_start(void)
     if (s_rx_dma_ch >= 0) AHB_DMA.in_intr[s_rx_dma_ch].clr.val = UINT32_MAX;
     if (s_tx_dma_ch >= 0) AHB_DMA.out_intr[s_tx_dma_ch].clr.val = UINT32_MAX;
     BITSCRAMBLER.state[BITSCRAMBLER_DIR_TX].val = 1u << 31;
+
+#ifdef C5VRX_VIDEO_LINK_EXPERIMENT
+    /* The wide analog filter (hardware captures showed the narrow BW20 one
+     * crushing the demodulated range), then the link: it takes over the
+     * gain, the channel and the free BitScrambler. */
+    s_rf_bw_mode = RF_BW_MODE_BW40;
+    apply_rf_bandwidth(true);
+    if ((err = video_link_start()) != ESP_OK) return err;
+#endif
 
     /* Distributed shadow observer: read-only, no PHY writes and no DMA pacing. */
     xTaskCreate(fusion_observer_task, "fusion_obs", 4096, NULL, 2, NULL);
