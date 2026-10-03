@@ -35,6 +35,7 @@
 #include "heap_memory_layout.h"
 #include "esp_rom_sys.h"
 #include "esp_private/wifi_os_adapter.h"
+#include "sdkconfig.h"
 
 /* Fixed receiver configuration -- not configurable at runtime. */
 #define RF_CHANNEL_NUMBER   173u
@@ -123,6 +124,27 @@ static uint32_t s_arc_generation;
 static uint8_t s_current_gain_val = 52u;
 
 static void arc_capture_vendor_state(void);
+
+/* Vendor 802.11p receive setup, phy_11p_set(1, 0) (CONFIG_C5VRX_PHY_11P).
+ * In the IDF 6.0.x libphy it stores enable/mode in phy_param[0x26]/[0x27],
+ * which phy_chip_set_chan() replays after every channel set, and writes
+ * 0x600A7CE4[4:2], 0x600A7030[5], 0x600A7048[14:8], 0x600A71C4[23:17] and
+ * analog I2C block 0x67 registers 6..13. The offset path
+ * (phy_chip_set_chan_offset()) does not replay it but redoes the band setup,
+ * so every tune below applies it again, last. */
+#if CONFIG_C5VRX_PHY_11P
+extern void phy_11p_set(uint8_t enable, uint8_t mode);
+#define PHY_11P_STATE "on"
+#else
+#define PHY_11P_STATE "off"
+#endif
+
+static void apply_phy_11p(void)
+{
+#if CONFIG_C5VRX_PHY_11P
+    phy_11p_set(1u, 0u);
+#endif
+}
 
 /**
  * Disable all 5 LMAC MAC TX hardware queues.
@@ -538,6 +560,8 @@ esp_err_t rf_start(void)
         phy_force_rx_gain(true, 52);
     }
 
+    apply_phy_11p();
+
     /* Vendor PHY initialization has now generated both valid RX gain tables
      * and completed its own calibration. Capture that state read-only before
      * C5VRX freezes receiver ownership. */
@@ -551,7 +575,7 @@ esp_err_t rf_start(void)
     phy_track_pll_deinit();
 #endif
 
-    ESP_EARLY_LOGW(TAG, "RF ready: 5865 MHz / ch%u / BW40 / gain=%s / sta_disconnected_pm=0 / pll_track=disabled",
+    ESP_EARLY_LOGW(TAG, "RF ready: 5865 MHz / ch%u / BW40 / gain=%s / sta_disconnected_pm=0 / pll_track=disabled / 11p=" PHY_11P_STATE,
                    RF_CHANNEL_NUMBER,
                    s_native_agc ? "NATIVE_HW_AGC(zero firmware writes)" : "forced(52)");
     return ESP_OK;
@@ -827,6 +851,7 @@ void rf_set_frequency_offset_khz(int offset_khz)
 #endif
     phy_chip_set_chan_offset(offset_khz);
     if (!s_native_agc) phy_force_rx_gain(true, s_current_gain_val);
+    apply_phy_11p();
 #ifdef C5VRX4_EXPERIMENT
     c5vrx4_resume();
 #endif
@@ -888,6 +913,7 @@ static esp_err_t rf_set_channel_impl(size_t index)
     }
     phy_wifi_fbw_sel(s_analog_bw40 ? 1u : 0u);
     if (!s_native_agc) phy_force_rx_gain(true, s_current_gain_val);
+    apply_phy_11p();   /* phy_chip_set_chan() replayed it already; keep it last */
 
     /* A channel change may make the vendor PHY regenerate its active RX gain
      * table and calibrated receive state. Recapture only after the retune and

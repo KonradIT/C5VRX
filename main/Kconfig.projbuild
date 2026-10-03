@@ -67,3 +67,20 @@ config C5VRX_DIRECT_GAIN_V3_EXPERIMENT
         Experimental issue #107 build. The existing live demodulator stays
         selected, while V3 alone owns automatic RF gain on the default
         profile. Hardware gain and video validation is required before merge.
+
+menu "C5VRX RF front end"
+    config C5VRX_PHY_11P
+        bool "Apply the vendor 802.11p receive setup, phy_11p_set(1, 0)"
+        default y
+        help
+            After RF start and after every channel or frequency-offset change,
+            call the ESP32-C5 PHY library's phy_11p_set(1, 0), its setup for
+            802.11p (the 5.9 GHz vehicular Wi-Fi band). It was reported to
+            improve reception from 5.75 to 5.99 GHz (observation credited to
+            SushiDude, @Ready4Sushi on X). C5VRX has no controlled
+            measurement of it yet: that range is the report, not a known
+            limit, and the effect below 5.75 GHz is unknown. It writes four
+            baseband registers and analog I2C block 0x67 registers 6..13; the
+            PHY library replays it on every channel set. Turn it off for an
+            A/B comparison.
+endmenu
