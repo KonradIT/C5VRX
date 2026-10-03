@@ -17,4 +17,4 @@ jobs:
           node-version: '22'
       - run: node --check web/app.js
       - run: node --check web/serial-terminal.js
-      - run: node --test web/serial-terminal.test.mjs
+      - run: node --test web/*.test.mjs

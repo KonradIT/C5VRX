@@ -574,7 +574,7 @@ btnFlash.addEventListener('click', async () => {
   try {
     const fileArray = [];
 
-    if (activeSource === 'github' || activeSource === 'pr') {
+    if (activeSource !== 'local') {
       const selected = getSelectedRemoteBuild();
       const rel = selected.release;
       if (!rel) throw new Error(activeSource === 'pr' ? 'No PR build selected' : 'No release selected');
