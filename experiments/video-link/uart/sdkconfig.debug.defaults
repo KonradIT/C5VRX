@@ -1,0 +1,2 @@
+# Desk build: [STREAM] statistics, the v / g dumps (components/video_link_uart/Kconfig).
+CONFIG_C5VRX_LINK_DEBUG=y

@@ -3,6 +3,10 @@
 
 usage: python tools/flash_pio.py [ENV] [PORT]      (default env xiao_c5, port auto)
 
+ENV is looked up in the root project (.pio/build/ENV) and in the PlatformIO
+projects under experiments/ (for example experiments/video-link/uart); when
+several have it, the newest build is written.
+
 The XIAO's USB-Serial/JTAG auto-reset is unreliable with C5VRX firmware
 running, so this uses the ROM download mode entered by hand:
 
@@ -25,7 +29,13 @@ import serial.tools.list_ports
 ROOT = Path(__file__).resolve().parent.parent
 env = sys.argv[1] if len(sys.argv) > 1 else "xiao_c5"
 port_arg = sys.argv[2] if len(sys.argv) > 2 else None
-build = ROOT / ".pio" / "build" / env
+builds = [ROOT / ".pio" / "build" / env,
+          *ROOT.glob(f"experiments/*/.pio/build/{env}"),
+          *ROOT.glob(f"experiments/*/*/.pio/build/{env}")]
+builds = [b for b in builds if (b / "firmware.bin").is_file()]
+if not builds:
+    raise SystemExit(f"no build of {env}; run pio run -e {env} in its project directory")
+build = max(builds, key=lambda b: (b / "firmware.bin").stat().st_mtime)
 
 images = {
     "0x2000": build / "bootloader.bin",

@@ -1,0 +1,66 @@
+menu "C5VRX video link (UART)"
+
+config C5VRX_LINK_CHANNEL
+    int "FPV channel at boot (band x 8 + channel - 1)"
+    range 0 47
+    default 5
+    help
+        Index into the receiver's channel table: bands R, A, B, E, F, L in
+        that order, 8 channels each. 5 = R6 (5843 MHz), 8 = A1 (5865 MHz).
+        A link build always uses the wide (BW40) analog filter.
+
+config C5VRX_LINK_STREAM
+    bool "Stream frames over UART from boot"
+    default y
+    help
+        Grab frames continuously and send them to a display board (LilyGo
+        T-Embed) over UART, protocol in protocol/link_proto.h. Console keys:
+        'S' streaming on/off, 'P' picture mode, 'N' channel scan, 'M'
+        horizontal smoothing.
+
+config C5VRX_LINK_DEBUG
+    bool "Debug output and dump tools"
+    default n
+    help
+        Adds what is only needed at the desk: the [STREAM] statistics line
+        every second and [LOST] traces, and the console dumps 'v' (raw I/Q
+        plus BitScrambler loopback demodulation, tools/link_dump.py) and 'g'
+        (one frame, tools/link_frame.py). Off in the final build: nothing is
+        printed while streaming, and the loopback BitScrambler and its 24 KB
+        of DMA buffers are not set up. sdkconfig.debug.defaults (PlatformIO
+        environment xiao_c5_link_debug) turns it on.
+
+config C5VRX_LINK_PICTURE_MODE
+    int "Picture mode at boot (0 auto, 1 fine, 2 raw)"
+    range 0 2
+    default 0
+    help
+        0 auto: rows coded near-losslessly, the tolerance chosen per frame so
+        that a frame fits the link in the time the grabber needs for it (up
+        to 25 fps PAL at 4 Mbaud). 1 fine: tolerance +/- 1 level, fewer fps.
+        2 raw: 8-bit rows, about 10 fps at 4 Mbaud. The display board can
+        switch modes at run time.
+
+config C5VRX_LINK_UART_TX_GPIO
+    int "UART TX GPIO"
+    default 11
+    help
+        11 is XIAO pad D6. Connect it to the display board's RX (T-Embed
+        UART connector RXD, GPIO44).
+
+config C5VRX_LINK_UART_RX_GPIO
+    int "UART RX GPIO"
+    default 12
+    help
+        12 is XIAO pad D7 (display board TX, T-Embed GPIO43): commands from
+        the display (scan, channel steps, picture mode).
+
+config C5VRX_LINK_UART_BAUD
+    int "UART baud rate"
+    default 4000000
+    help
+        4000000 is proven on the bench. 5000000 is the limit of both UARTs
+        (ESP32-C5 and ESP32-S3) and gives the auto picture mode 25 % more
+        bytes per frame; the display firmware follows either rate.
+
+endmenu

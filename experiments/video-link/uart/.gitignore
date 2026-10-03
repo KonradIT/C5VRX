@@ -1,0 +1,11 @@
+# idf.py
+/build/
+/sdkconfig
+/sdkconfig.old
+# PlatformIO: build tree and the generated per-environment configuration
+/.pio/
+/sdkconfig.xiao_c5_link*
+# Host tests
+/build-host/
+# The root .gitignore drops sdkconfig.*; this one is a test stub.
+!/test/stubs/sdkconfig.h

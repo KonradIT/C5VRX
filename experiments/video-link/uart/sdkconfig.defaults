@@ -1,0 +1,11 @@
+# Overlay on the root sdkconfig.defaults for the video-link build.
+
+# Paths in sdkconfig are relative to this project directory.
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="../../../partitions.csv"
+
+# The link owns the gain (MANUAL), where Direct Gain V3 never acts; its
+# 200 us observer timer would only preempt the frame grabber. Phase8 HR, a
+# DAC-path demodulator this build does not run, only compiles with V3 (as in
+# experiments/c5vrx-4, both are off).
+CONFIG_C5VRX_DIRECT_GAIN_V3_EXPERIMENT=n
+CONFIG_C5VRX_PHASE8_HR_LIVE_TEST=n
