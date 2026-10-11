@@ -612,7 +612,12 @@ static uint16_t s_current_freq_mhz = 5865u;
 static int s_current_offset_khz = 0;
 
 #define C5_WIFI5_MIN_MHZ 5180u
-#define C5_WIFI5_MAX_MHZ 5885u
+/* Channels above the last public centre (177 / 5885 MHz) are reached with
+ * phy_set_freq from that centre. zerowidth/C5VRX PR #3 decoded R8 (5917 MHz)
+ * this way with full line lock and tuned E8 (5945 MHz); the band table already
+ * lists E6..E8 and R8, which the old 5885 MHz ceiling refused. The RX DC
+ * calibration's highest point is 5855 MHz, so DC centring matters up here. */
+#define C5_WIFI5_MAX_MHZ 5945u
 
 typedef struct {
     uint8_t channel;
